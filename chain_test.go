@@ -4,6 +4,7 @@ import (
 	"errors"
 	. "github.com/smartystreets/goconvey/convey"
 	"testing"
+	"time"
 )
 
 func TestC_Handles(t *testing.T) {
@@ -52,6 +53,40 @@ func TestC_Handles(t *testing.T) {
 			So(err, ShouldBeNil)
 			So(val, ShouldEqual, 2)
 		})
+	})
+}
 
+func TestHandleChain_ParallelRun(t *testing.T) {
+	Convey("ParallelRun", t, func() {
+		var (
+			val     = 0
+			errTest = errors.New("test")
+		)
+
+		f1 := func() error {
+			val++
+			time.Sleep(time.Millisecond * 300)
+			return nil
+		}
+		f2 := func(i int) {
+			val += i
+			time.Sleep(time.Millisecond * 300)
+		}
+		f3 := func() error {
+			time.Sleep(time.Millisecond * 300)
+			return errTest
+		}
+
+		Convey("ParallelRun", func() {
+			err := ParallelRun(f1, func() error { f2(1); return nil }, f3)
+			So(err, ShouldNotBeNil)
+			t.Log(err)
+		})
+
+		Convey("Run", func() {
+			err := Run(f1, func() error { f2(1); return nil }, f3)
+			So(err, ShouldNotBeNil)
+			t.Log(err)
+		})
 	})
 }
