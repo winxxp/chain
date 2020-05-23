@@ -4,7 +4,6 @@ import (
 	"errors"
 	. "github.com/smartystreets/goconvey/convey"
 	"testing"
-	"time"
 )
 
 func TestC_Handles(t *testing.T) {
@@ -14,18 +13,18 @@ func TestC_Handles(t *testing.T) {
 			errTest = errors.New("test")
 		)
 
-		last := func(err error) {
+		last := func(ctx *Context, err error) {
 			val = 0
 			t.Log("Last error: ", err)
 		}
 
-		f1 := func() error { val++; return nil }
+		f1 := func(ctx *Context) error { val++; return nil }
 		f2 := func(i int) { val += i }
-		f3 := func() error { return errTest }
-		f4 := func() error { val++; return nil }
+		f3 := func(ctx *Context) error { return errTest }
+		f4 := func(ctx *Context) error { val++; return nil }
 
 		Convey("Error", func() {
-			err := New().Handles(f1, func() error { f2(2); return nil }, f3, f4).Run()
+			err := New().Handles(f1, func(ctx *Context) error { f2(2); return nil }, f3, f4).Run()
 			So(err, ShouldBeError, errTest)
 			So(val, ShouldEqual, 3)
 		})
@@ -39,7 +38,7 @@ func TestC_Handles(t *testing.T) {
 		Convey("Add Last", func() {
 			r := New().Last(last)
 			err := r.Handles(
-				f1, func() error {
+				f1, func(ctx *Context) error {
 					f2(10)
 					return nil
 				},
@@ -53,40 +52,36 @@ func TestC_Handles(t *testing.T) {
 			So(err, ShouldBeNil)
 			So(val, ShouldEqual, 2)
 		})
+
+		Convey("Each", func() {
+			New().EachBefore(func(ctx *Context) {
+				t.Log("each before")
+			}).EachAfter(func(ctx *Context, err error) {
+				t.Logf("each after %v", err)
+			}).Handles(f1, f3).Run()
+		})
 	})
 }
 
-func TestHandleChain_ParallelRun(t *testing.T) {
-	Convey("ParallelRun", t, func() {
-		var (
-			val     = 0
-			errTest = errors.New("test")
-		)
+func TestWithContext(t *testing.T) {
+	Convey("with context", t, func() {
 
-		f1 := func() error {
-			val++
-			time.Sleep(time.Millisecond * 300)
-			return nil
-		}
-		f2 := func(i int) {
-			val += i
-			time.Sleep(time.Millisecond * 300)
-		}
-		f3 := func() error {
-			time.Sleep(time.Millisecond * 300)
-			return errTest
-		}
-
-		Convey("ParallelRun", func() {
-			err := ParallelRun(f1, func() error { f2(1); return nil }, f3)
-			So(err, ShouldNotBeNil)
-			t.Log(err)
-		})
-
-		Convey("Run", func() {
-			err := Run(f1, func() error { f2(1); return nil }, f3)
-			So(err, ShouldNotBeNil)
-			t.Log(err)
+		Convey("1", func() {
+			Run(
+				func(ctx *Context) error {
+					ctx.Set("k", 1)
+					return nil
+				},
+				func(ctx *Context) error {
+					t.Logf("find k %d", ctx.MustGet("k").(int))
+					ctx.Set("k", 2)
+					return nil
+				},
+				func(ctx *Context) error {
+					t.Logf("find k %d", ctx.MustGet("k").(int))
+					return nil
+				},
+			)
 		})
 	})
 }
